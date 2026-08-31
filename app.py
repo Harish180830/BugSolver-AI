@@ -35,7 +35,7 @@ def call_llm(api_key, system_prompt, user_prompt):
         client = Groq(api_key=api_key.strip())
 
         response = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
+            model="openai/gpt-oss-120b",
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt},
