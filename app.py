@@ -41,7 +41,7 @@ def call_llm(api_key, system_prompt, user_prompt):
                 {"role": "user", "content": user_prompt},
             ],
             temperature=0.2,
-            max_tokens=4000,
+            max_tokens=1500,
         )
 
         return response.choices[0].message.content, None
@@ -193,17 +193,27 @@ def get_project_summary(files):
     return summary
 
 
-def build_code_context(files):
-    """Build code context for the LLM."""
+def build_code_context(files, max_total_chars=9000, max_file_chars=3000):
+    """Build code context for the LLM, capped to stay within Groq's
+    free-tier TPM (tokens per minute) limits."""
     context = ""
 
     for filename, content in files.items():
+
+        if len(context) >= max_total_chars:
+            context += "\n\n... (remaining files omitted to fit token limit) ..."
+            break
+
+        snippet = content[:max_file_chars]
+        if len(content) > max_file_chars:
+            snippet += "\n# ... (truncated) ..."
+
         context += (
             f"\n\n### FILE: {filename}\n"
-            f"```python\n{content[:12000]}\n```"
+            f"```python\n{snippet}\n```"
         )
 
-    return context
+    return context[:max_total_chars]
 
 
 # ============================================================
