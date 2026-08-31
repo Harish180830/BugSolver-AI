@@ -2,6 +2,7 @@ import re
 import ast
 import zipfile
 import tempfile
+import base64
 from pathlib import Path
 
 import requests
@@ -17,8 +18,201 @@ from groq import Groq
 st.set_page_config(
     page_title="FixFlow AI",
     page_icon="🔧",
-    layout="wide"
+    layout="wide",
+    initial_sidebar_state="collapsed",
 )
+
+# ------------------------------------------------------------
+# BACKGROUND MEDIA CONFIG
+# Drop a background video or GIF into an "assets" folder next
+# to this script and point to it below. MP4 is recommended
+# (much smaller file size, smoother playback than GIF).
+# If neither file is found, an animated gradient is used
+# automatically so the app still looks good out of the box.
+# ------------------------------------------------------------
+BG_VIDEO_PATH = "assets/bg.mp4"
+BG_GIF_PATH = "assets/bg.gif"
+
+# ------------------------------------------------------------
+# DEMO LOGIN CREDENTIALS
+# Replace this with real auth (DB / OAuth / etc.) for production.
+# ------------------------------------------------------------
+DEMO_USERS = {
+    "admin": "admin123",
+    "demo": "demo123",
+}
+
+
+# ============================================================
+# BACKGROUND RENDERING (video / GIF / animated fallback)
+# ============================================================
+
+def _file_to_base64(path):
+    return base64.b64encode(Path(path).read_bytes()).decode()
+
+
+def inject_background():
+    """Render a full-screen looping video/GIF behind the app.
+    Falls back to an animated gradient if no asset file exists."""
+
+    if Path(BG_VIDEO_PATH).exists():
+        video_b64 = _file_to_base64(BG_VIDEO_PATH)
+        st.markdown(
+            f"""
+            <style>
+            .stApp {{ background: transparent; }}
+            #bg-media {{
+                position: fixed;
+                top: 0; left: 0;
+                width: 100vw; height: 100vh;
+                object-fit: cover;
+                z-index: -2;
+            }}
+            #bg-overlay {{
+                position: fixed;
+                top: 0; left: 0;
+                width: 100vw; height: 100vh;
+                background: rgba(10, 10, 20, 0.55);
+                z-index: -1;
+            }}
+            </style>
+            <video autoplay muted loop playsinline id="bg-media">
+                <source src="data:video/mp4;base64,{video_b64}" type="video/mp4">
+            </video>
+            <div id="bg-overlay"></div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+    elif Path(BG_GIF_PATH).exists():
+        gif_b64 = _file_to_base64(BG_GIF_PATH)
+        st.markdown(
+            f"""
+            <style>
+            .stApp {{
+                background-image:
+                    linear-gradient(rgba(10,10,20,0.55), rgba(10,10,20,0.55)),
+                    url("data:image/gif;base64,{gif_b64}");
+                background-size: cover;
+                background-position: center;
+                background-attachment: fixed;
+            }}
+            </style>
+            """,
+            unsafe_allow_html=True,
+        )
+
+    else:
+        # No local asset found yet -> animated gradient fallback
+        st.markdown(
+            """
+            <style>
+            .stApp {
+                background: linear-gradient(-45deg, #0f2027, #1c2b3a, #2c5364, #16222a);
+                background-size: 400% 400%;
+                animation: gradientShift 12s ease infinite;
+            }
+            @keyframes gradientShift {
+                0%   { background-position: 0% 50%; }
+                50%  { background-position: 100% 50%; }
+                100% { background-position: 0% 50%; }
+            }
+            </style>
+            """,
+            unsafe_allow_html=True,
+        )
+
+
+def inject_glass_css():
+    """Shared glassmorphism styling for cards / forms."""
+    st.markdown(
+        """
+        <style>
+        [data-testid="stForm"] {
+            background: rgba(255, 255, 255, 0.07);
+            backdrop-filter: blur(18px);
+            -webkit-backdrop-filter: blur(18px);
+            border: 1px solid rgba(255, 255, 255, 0.18);
+            border-radius: 20px;
+            padding: 40px 35px 20px 35px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
+        }
+        .fixflow-title {
+            text-align: center;
+            color: #ffffff;
+            font-size: 2.3rem;
+            font-weight: 800;
+            margin-bottom: 0px;
+            text-shadow: 0 2px 12px rgba(0,0,0,0.5);
+        }
+        .fixflow-subtitle {
+            text-align: center;
+            color: rgba(255,255,255,0.75);
+            font-size: 1rem;
+            margin-bottom: 28px;
+        }
+        div[data-testid="stForm"] label, div[data-testid="stForm"] p {
+            color: #f0f0f0 !important;
+        }
+        .stButton>button, [data-testid="stFormSubmitButton"] button {
+            background: linear-gradient(90deg, #ff512f, #dd2476);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            padding: 10px 0;
+            font-weight: 600;
+            transition: transform 0.15s ease;
+        }
+        .stButton>button:hover, [data-testid="stFormSubmitButton"] button:hover {
+            transform: scale(1.02);
+            filter: brightness(1.1);
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+# ============================================================
+# LOGIN PAGE
+# ============================================================
+
+def check_credentials(username, password):
+    return username in DEMO_USERS and DEMO_USERS[username] == password
+
+
+def login_page():
+    inject_background()
+    inject_glass_css()
+
+    col1, col2, col3 = st.columns([1, 1.1, 1])
+
+    with col2:
+        st.markdown("<br><br>", unsafe_allow_html=True)
+        st.markdown('<div class="fixflow-title">🔧 FixFlow AI</div>', unsafe_allow_html=True)
+        st.markdown(
+            '<div class="fixflow-subtitle">Agentic Autonomous Bug Fixing Assistant</div>',
+            unsafe_allow_html=True,
+        )
+
+        with st.form("login_form", clear_on_submit=False):
+            username = st.text_input("Username", placeholder="Enter username")
+            password = st.text_input("Password", type="password", placeholder="Enter password")
+            submitted = st.form_submit_button("🔓 Login", use_container_width=True)
+
+            if submitted:
+                if check_credentials(username.strip(), password):
+                    st.session_state["logged_in"] = True
+                    st.session_state["username"] = username.strip()
+                    st.rerun()
+                else:
+                    st.error("Invalid username or password.")
+
+        st.markdown(
+            '<p style="text-align:center;color:rgba(255,255,255,0.5);font-size:0.8rem;">'
+            "Demo credentials: admin / admin123 or demo / demo123</p>",
+            unsafe_allow_html=True,
+        )
 
 
 # ============================================================
@@ -348,8 +542,22 @@ PROPOSED FIX:
 
 def main():
 
-    st.title("🔧 FixFlow AI")
-    st.subheader("Agentic Autonomous Bug Detection & Fixing Assistant")
+    inject_background()
+    inject_glass_css()
+
+    st.markdown(
+        f"""
+        <div style="background: rgba(0,0,0,0.35); backdrop-filter: blur(6px);
+                    border-radius: 16px; padding: 18px 24px; margin-bottom: 10px;">
+            <h1 style="color:white;margin:0;">🔧 FixFlow AI</h1>
+            <p style="color:rgba(255,255,255,0.8);margin:4px 0 0 0;">
+                Agentic Autonomous Bug Detection &amp; Fixing Assistant
+                &nbsp;·&nbsp; Logged in as <b>{st.session_state.get('username', 'guest')}</b>
+            </p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
     st.write(
         "Analyze Python code from manual input, uploaded files, "
@@ -361,6 +569,14 @@ def main():
     # --------------------------------------------------------
 
     with st.sidebar:
+
+        st.markdown(f"👤 **{st.session_state.get('username', 'guest')}**")
+        if st.button("🚪 Logout", use_container_width=True):
+            st.session_state["logged_in"] = False
+            st.session_state.pop("username", None)
+            st.rerun()
+
+        st.divider()
 
         st.header("⚙️ Setup")
 
@@ -658,4 +874,11 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+
+    if "logged_in" not in st.session_state:
+        st.session_state["logged_in"] = False
+
+    if not st.session_state["logged_in"]:
+        login_page()
+    else:
+        main()
